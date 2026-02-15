@@ -9,6 +9,10 @@ pipeline {
         )
     }
 
+    environment {
+        AWS_DEFAULT_REGION = "us-east-1"
+    }
+
     stages {
 
         stage('Terraform Version') {
@@ -21,21 +25,23 @@ pipeline {
             steps {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
                                   credentialsId: 'aws-access-key']]) {
-                    sh '''
-                    export AWS_DEFAULT_REGION=us-east-1
-                    terraform init
-                    '''
+                    sh 'terraform init'
                 }
             }
         }
 
-        stage('Terraform PLAN') {
+        stage('Terraform Plan') {
+            when {
+                anyOf {
+                    expression { params.ACTION == 'PLAN' }
+                    expression { params.ACTION == 'APPLY' }
+                    expression { params.ACTION == 'DESTROY' }
+                }
+            }
             steps {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
                                   credentialsId: 'aws-access-key']]) {
                     sh '''
-                    export AWS_DEFAULT_REGION=us-east-1
-
                     if [ "$ACTION" = "DESTROY" ]; then
                         terraform plan -destroy -out=tfplan
                     else
@@ -46,21 +52,27 @@ pipeline {
             }
         }
 
-        stage('Terraform Execute') {
+        stage('Terraform Apply') {
+            when {
+                expression { params.ACTION == 'APPLY' }
+            }
             steps {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
                                   credentialsId: 'aws-access-key']]) {
-                    sh '''
-                    export AWS_DEFAULT_REGION=us-east-1
+                    sh 'terraform apply -auto-approve tfplan'
+                }
+            }
+        }
 
-                    if [ "$ACTION" = "DESTROY" ]; then
-                        terraform destroy -auto-approve
-                    elif
-                        terraform plan
-                    else
-                        terraform apply -auto-approve tfplan
-                    fi
-                    '''
+        stage('Terraform Destroy') {
+            when {
+                expression { params.ACTION == 'DESTROY' }
+            }
+            steps {
+                input message: "Are you sure you want to DESTROY infra?"
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
+                                  credentialsId: 'aws-access-key']]) {
+                    sh 'terraform destroy -auto-approve'
                 }
             }
         }
