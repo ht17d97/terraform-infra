@@ -1,62 +1,30 @@
 pipeline {
     agent any
 
-    environment {
-        AWS_ACCESS_KEY_ID     = credentials('aws-access-key')
-        AWS_SECRET_ACCESS_KEY = credentials('aws-secret-key')
-    }
-
-    options {
-        timestamps()
-    }
-
     stages {
 
         stage('Checkout Code') {
             steps {
                 git branch: 'main',
-                    credentialsId: 'github-ssh',
-                    url: 'git@github.com:ht17d97/terraform-infra.git'
+                    credentialsId: 'git-access',
+                    url: 'https://github.com/ht17d97/terraform-infra.git'
             }
         }
 
-        stage('Terraform Init') {
+        stage('Terraform Init & Apply') {
             steps {
-                sh 'terraform init'
-            }
-        }
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
+                                  credentialsId: 'aws-access-key']]) {
 
-        stage('Terraform Validate') {
-            steps {
-                sh 'terraform validate'
+                    sh '''
+                    export AWS_DEFAULT_REGION=us-east-1
+                    terraform init
+                    terraform validate
+                    terraform plan
+                    terraform apply -auto-approve
+                    '''
+                }
             }
-        }
-
-        stage('Terraform Plan') {
-            steps {
-                sh 'terraform plan -out=tfplan'
-            }
-        }
-
-        stage('Approval') {
-            steps {
-                input message: "Apply Terraform Changes?"
-            }
-        }
-
-        stage('Terraform Apply') {
-            steps {
-                sh 'terraform apply -auto-approve tfplan'
-            }
-        }
-    }
-
-    post {
-        success {
-            echo 'Infrastructure deployed successfully!'
-        }
-        failure {
-            echo 'Pipeline failed!'
         }
     }
 }
