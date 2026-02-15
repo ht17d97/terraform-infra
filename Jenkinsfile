@@ -7,24 +7,30 @@ pipeline {
 
     stages {
 
-        stage('Checkout Code') {
+        stage('Terraform Version') {
             steps {
-                git branch: 'main',
-                    credentialsId: 'git-access',
-                    url: 'https://github.com/ht17d97/terraform-infra.git'
+                sh 'terraform version'
             }
         }
 
-        stage('Terraform Init & Apply') {
+        stage('Terraform Init') {
             steps {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
                                   credentialsId: 'aws-access-key']]) {
-
                     sh '''
                     export AWS_DEFAULT_REGION=us-east-1
                     terraform init
-                    terraform validate
-                    terraform plan
+                    '''
+                }
+            }
+        }
+
+        stage('Terraform Apply') {
+            steps {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
+                                  credentialsId: 'aws-access-key']]) {
+                    sh '''
+                    export AWS_DEFAULT_REGION=us-east-1
                     terraform apply -auto-approve
                     '''
                 }
